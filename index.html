@@ -509,7 +509,7 @@
 
 <script>
 // Initialize Stripe with your publishable key
-// Replace with your actual publishable key from Stripe dashboard
+// IMPORTANT: Replace with your actual publishable key from Stripe dashboard
 const stripe = Stripe('pk_test_51S1OAH3pBglTeA0mBud6ByC3NIv6nMTrQ4ITBQ1h1GDTBX5ygMuoeCVeBZdF1Jy5wmQq819Xbd4kKRjZ3aJJcDfu00dGiF5MC6');
 const elements = stripe.elements();
 
@@ -718,24 +718,49 @@ form.addEventListener('submit', async (event) => {
     }
 
     // In a real implementation, you would send this to your server
-    // For demo purposes, we'll simulate a successful payment
-    setTimeout(() => {
-      // Payment successful
-      const paymentDetails = {
-        amount: amount,
+    // Here's how it would work:
+    
+    // 1. Create a customer on your server
+    // 2. Create a subscription for that customer
+    // 3. Confirm the payment
+    
+    // For demonstration, we'll simulate the API call
+    const response = await fetch('/create-subscription', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        paymentMethodId: paymentMethod.id,
         name: name,
         email: email,
-        donationBy: donationByName || '',
-        subscriptionId: 'sub_' + Math.random().toString(36).substr(2, 9),
-        isMonthly: true
-      };
-      
-      // Store in sessionStorage to pass to the success page
-      sessionStorage.setItem('paymentDetails', JSON.stringify(paymentDetails));
-      
-      // Redirect to success page
-      window.location.href = 'success_confirmation.html';
-    }, 2000);
+        amount: amount * 100, // Convert to cents
+        donationByName: donationByName,
+        address: address
+      })
+    });
+
+    const subscription = await response.json();
+
+    if (subscription.error) {
+      throw new Error(subscription.error);
+    }
+
+    // Payment successful
+    const paymentDetails = {
+      amount: amount,
+      name: name,
+      email: email,
+      donationBy: donationByName || '',
+      subscriptionId: subscription.id,
+      isMonthly: true
+    };
+    
+    // Store in sessionStorage to pass to the success page
+    sessionStorage.setItem('paymentDetails', JSON.stringify(paymentDetails));
+    
+    // Redirect to success page
+    window.location.href = 'success_confirmation.html';
     
   } catch (err) {
     // Show error to customer
