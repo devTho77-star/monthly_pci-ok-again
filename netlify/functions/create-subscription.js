@@ -1,9 +1,9 @@
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 exports.handler = async (event, context) => {
-  // Set CORS headers for security
+  // Set CORS headers
   const headers = {
-    'Access-Control-Allow-Origin': 'https://your-domain.netlify.app',
+    'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type',
     'Access-Control-Allow-Methods': 'POST, OPTIONS'
   };
@@ -27,16 +27,6 @@ exports.handler = async (event, context) => {
   }
 
   try {
-    // Validate content type
-    const contentType = event.headers['content-type'] || event.headers['Content-Type'];
-    if (!contentType || !contentType.includes('application/json')) {
-      return {
-        statusCode: 400,
-        headers,
-        body: JSON.stringify({ error: 'Content-Type must be application/json' })
-      };
-    }
-
     const { 
       amount, 
       currency = 'eur', 
@@ -44,7 +34,6 @@ exports.handler = async (event, context) => {
       name, 
       email, 
       phone, 
-      address, 
       paymentMethodId 
     } = JSON.parse(event.body);
 
@@ -86,14 +75,6 @@ exports.handler = async (event, context) => {
       name: name.trim(),
       email: email.toLowerCase().trim(),
       phone: phone ? phone.trim() : undefined,
-      address: address ? {
-        line1: address.line1?.trim() || '',
-        line2: address.line2?.trim() || '',
-        city: address.city?.trim() || '',
-        state: address.state?.trim() || '',
-        postal_code: address.postal_code?.trim() || '',
-        country: address.country?.trim() || 'IE',
-      } : undefined,
     });
 
     // Attach payment method
