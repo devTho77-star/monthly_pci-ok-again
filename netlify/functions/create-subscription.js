@@ -4,7 +4,11 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 exports.handler = async (event, context) => {
   try {
     if (event.httpMethod !== 'POST') {
-      return { statusCode: 405, body: 'Method Not Allowed' };
+      return {
+        statusCode: 405,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ error: 'Method Not Allowed' }),
+      };
     }
 
     const { 
@@ -19,20 +23,28 @@ exports.handler = async (event, context) => {
     } = JSON.parse(event.body);
 
     if (!amount || amount <= 0) {
-      return { statusCode: 400, body: JSON.stringify({ error: 'Invalid amount' }) };
+      return {
+        statusCode: 400,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ error: 'Invalid amount' }),
+      };
     }
 
     if (!paymentMethodId) {
-      return { statusCode: 400, body: JSON.stringify({ error: 'Payment method ID is required' }) };
+      return {
+        statusCode: 400,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ error: 'Payment method ID is required' }),
+      };
     }
 
-    // 1. Create a product for recurring donation
+    // 1. Create product
     const product = await stripe.products.create({
       name: 'Monthly Donation',
       description: donation_by || 'Recurring donation',
     });
 
-    // 2. Create a price for the subscription
+    // 2. Create price
     const price = await stripe.prices.create({
       unit_amount: amount,
       currency: currency,
@@ -40,11 +52,11 @@ exports.handler = async (event, context) => {
       product: product.id,
     });
 
-    // 3. Create a Stripe Customer with billing details
+    // 3. Create customer
     const customer = await stripe.customers.create({
-      name: name,
-      email: email,
-      phone: phone,
+      name,
+      email,
+      phone,
       address: {
         line1: address.line1,
         line2: address.line2 || '',
@@ -55,19 +67,17 @@ exports.handler = async (event, context) => {
       },
     });
 
-    // 4. Attach payment method to customer
+    // 4. Attach payment method
     await stripe.paymentMethods.attach(paymentMethodId, {
       customer: customer.id,
     });
 
-    // 5. Set as default payment method
+    // 5. Set as default
     await stripe.customers.update(customer.id, {
-      invoice_settings: {
-        default_payment_method: paymentMethodId,
-      },
+      invoice_settings: { default_payment_method: paymentMethodId },
     });
 
-    // 6. Create the subscription
+    // 6. Create subscription
     try {
       const subscription = await stripe.subscriptions.create({
         customer: customer.id,
@@ -75,24 +85,21 @@ exports.handler = async (event, context) => {
         expand: ['latest_invoice.payment_intent'],
       });
 
-      // Return subscription details
       return {
         statusCode: 200,
-        body: JSON.stringify({ 
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           status: subscription.status,
           subscriptionId: subscription.id,
-          clientSecret: subscription.latest_invoice.payment_intent 
-            ? subscription.latest_invoice.payment_intent.client_secret 
-            : null,
+          clientSecret: subscription.latest_invoice.payment_intent?.client_secret || null,
         }),
       };
     } catch (subscriptionError) {
-      // Handle cases where the initial payment fails
       if (subscriptionError.code === 'invoice_payment_intent_requires_action') {
-        // Subscription created but requires authentication
         return {
           statusCode: 200,
-          body: JSON.stringify({ 
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
             status: 'requires_action',
             subscriptionId: subscriptionError.subscription.id,
             clientSecret: subscriptionError.payment_intent.client_secret,
@@ -106,6 +113,7 @@ exports.handler = async (event, context) => {
     console.error('Stripe error:', err);
     return {
       statusCode: 500,
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ error: err.message }),
     };
   }
